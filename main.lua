@@ -159,7 +159,6 @@ local PlaceCorner = Instance.new("UICorner")
 PlaceCorner.CornerRadius = UDim.new(0, 8)
 PlaceCorner.Parent = PlaceBtn
 
--- ===== НОВАЯ КНОПКА "УДАЛИТЬ ПОСЛЕДНЮЮ" =====
 local UndoBtn = Instance.new("TextButton")
 UndoBtn.Size = UDim2.new(0.42, 0, 0, 44)
 UndoBtn.Position = UDim2.new(0.51, 0, 0.04, 0)
@@ -424,7 +423,6 @@ local function PlacePoint()
     StatusText.TextColor3 = Color3.fromRGB(100, 200, 100)
 end
 
--- ===== НОВАЯ ФУНКЦИЯ: УДАЛИТЬ ПОСЛЕДНЮЮ ТОЧКУ =====
 local function UndoLastPoint()
     if #Points == 0 then
         StatusText.Text = "❌ Нет точек для удаления"
@@ -480,17 +478,47 @@ local function StopFlight()
     end
 end
 
-local function StartFlight()
+-- ===== НОВАЯ ФУНКЦИЯ: ВЫХОД ИЗ ПОЛЁТА (для задержки) =====
+local function PauseFlight()
+    IsFlying = false
+    if FlyConnection then
+        FlyConnection:Disconnect()
+        FlyConnection = nil
+    end
+    if BodyVelocity then
+        BodyVelocity:Destroy()
+        BodyVelocity = nil
+    end
+    if BodyGyro then
+        BodyGyro:Destroy()
+        BodyGyro = nil
+    end
+    local Character = Player.Character
+    if Character then
+        local Humanoid = Character:FindFirstChild("Humanoid")
+        if Humanoid then
+            Humanoid.PlatformStand = false
+            Humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
+            Humanoid:SetStateEnabled(Enum.HumanoidStateType.GettingUp, true)
+            Humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
+            Humanoid:SetStateEnabled(Enum.HumanoidStateType.Climbing, true)
+        end
+    end
+    StartBtn.Text = "🚀 СТАРТ"
+    StartBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 120)
+end
+
+-- ===== НОВАЯ ФУНКЦИЯ: ПРОДОЛЖИТЬ ПОЛЁТ (после задержки) =====
+local function ResumeFlight()
     if #Points == 0 then
         StatusText.Text = "❌ Нет точек!"
         StatusText.TextColor3 = Color3.fromRGB(200, 80, 80)
         return
     end
-    if IsFlying then return end
+    
     IsFlying = true
-    IsWaitingForLoop = false
     CurrentIndex = 1
-
+    
     local Character = Player.Character
     if not Character then
         IsFlying = false
@@ -552,25 +580,24 @@ local function StartFlight()
             CurrentIndex = CurrentIndex + 1
             if CurrentIndex > #Points then
                 if IsLoop then
+                    -- ВЫХОДИМ ИЗ ПОЛЁТА ПЕРЕД ЗАДЕРЖКОЙ
                     IsWaitingForLoop = true
                     StatusText.Text = "🔄 Зацикливание... " .. LoopDelay .. "с"
                     StatusText.TextColor3 = Color3.fromRGB(100, 200, 255)
                     
-                    if BodyVelocity then
-                        BodyVelocity.Velocity = Vector3.new(0, 0, 0)
-                    end
+                    -- Останавливаем полёт (персонаж стоит на земле)
+                    PauseFlight()
                     
                     task.wait(LoopDelay)
                     
-                    if not IsFlying then
+                    if not IsLoop or not IsFlying then
                         IsWaitingForLoop = false
                         return
                     end
                     
+                    -- ПРОДОЛЖАЕМ ПОЛЁТ
                     IsWaitingForLoop = false
-                    CurrentIndex = 1
-                    StatusText.Text = "✈️ Точка 1/" .. #Points
-                    StatusText.TextColor3 = Color3.fromRGB(100, 200, 255)
+                    ResumeFlight()
                 else
                     StatusText.Text = "✅ Маршрут пройден!"
                     StatusText.TextColor3 = Color3.fromRGB(100, 200, 100)
@@ -590,6 +617,16 @@ local function StartFlight()
             BodyGyro.CFrame = CFrame.lookAt(Root.Position, Root.Position + Dir)
         end
     end)
+end
+
+local function StartFlight()
+    if #Points == 0 then
+        StatusText.Text = "❌ Нет точек!"
+        StatusText.TextColor3 = Color3.fromRGB(200, 80, 80)
+        return
+    end
+    if IsFlying then return end
+    ResumeFlight()
 end
 
 -- ===== ПЕРЕКЛЮЧЕНИЕ ВКЛАДОК =====
