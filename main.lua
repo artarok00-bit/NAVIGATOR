@@ -1,4 +1,4 @@
--- [[ НАВИГАТОР ПО ТОЧКАМ (рабочая версия) ]]
+-- [[ НАВИГАТОР ПО ТОЧКАМ (исправлен) ]]
 -- Вкладки: Точки | Настройки
 -- Функции: постановка точек, полёт по порядку, зацикливание, задержка
 
@@ -18,6 +18,7 @@ local BodyVelocity = nil
 local BodyGyro = nil
 local FlyConnection = nil
 local CurrentTab = "Points"
+local IsWaitingForLoop = false
 
 -- ===== GUI =====
 local ScreenGui = Instance.new("ScreenGui")
@@ -375,6 +376,40 @@ local function ClearPoints()
     StatusText.TextColor3 = Color3.fromRGB(200, 200, 100)
 end
 
+local function StopFlight()
+    IsFlying = false
+    IsWaitingForLoop = false
+    if FlyConnection then
+        FlyConnection:Disconnect()
+        FlyConnection = nil
+    end
+    if BodyVelocity then
+        BodyVelocity:Destroy()
+        BodyVelocity = nil
+    end
+    if BodyGyro then
+        BodyGyro:Destroy()
+        BodyGyro = nil
+    end
+    local Character = Player.Character
+    if Character then
+        local Humanoid = Character:FindFirstChild("Humanoid")
+        if Humanoid then
+            Humanoid.PlatformStand = false
+            Humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
+            Humanoid:SetStateEnabled(Enum.HumanoidStateType.GettingUp, true)
+            Humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
+            Humanoid:SetStateEnabled(Enum.HumanoidStateType.Climbing, true)
+        end
+    end
+    StartBtn.Text = "🚀 СТАРТ"
+    StartBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 120)
+    if StatusText.Text ~= "✅ Маршрут пройден!" then
+        StatusText.Text = "⏹ Остановлен"
+        StatusText.TextColor3 = Color3.fromRGB(200, 200, 100)
+    end
+end
+
 local function StartFlight()
     if #Points == 0 then
         StatusText.Text = "❌ Нет точек!"
@@ -383,6 +418,7 @@ local function StartFlight()
     end
     if IsFlying then return end
     IsFlying = true
+    IsWaitingForLoop = false
     CurrentIndex = 1
 
     local Character = Player.Character
@@ -434,6 +470,11 @@ local function StartFlight()
             return
         end
 
+        -- Если ждём зацикливание — ничего не делаем
+        if IsWaitingForLoop then
+            return
+        end
+
         local CurrentPos = Root.Position
         local Target = Points[CurrentIndex]
         local Dist = (Target - CurrentPos).Magnitude
@@ -441,15 +482,34 @@ local function StartFlight()
         if Dist < 3 then
             CurrentIndex = CurrentIndex + 1
             if CurrentIndex > #Points then
-                StatusText.Text = "✅ Маршрут пройден!"
-                StatusText.TextColor3 = Color3.fromRGB(100, 200, 100)
+                -- ДОСТИГЛИ ПОСЛЕДНЕЙ ТОЧКИ
                 if IsLoop then
-                    StatusText.Text = "🔄 Зацикливание..."
+                    -- Зацикливание: ждём задержку, потом начинаем сначала
+                    IsWaitingForLoop = true
+                    StatusText.Text = "🔄 Зацикливание..." .. LoopDelay .. "с"
                     StatusText.TextColor3 = Color3.fromRGB(100, 200, 255)
+                    
+                    -- Останавливаем движение
+                    if BodyVelocity then
+                        BodyVelocity.Velocity = Vector3.new(0, 0, 0)
+                    end
+                    
                     task.wait(LoopDelay)
+                    
+                    if not IsFlying then
+                        IsWaitingForLoop = false
+                        return
+                    end
+                    
+                    -- Начинаем сначала
+                    IsWaitingForLoop = false
                     CurrentIndex = 1
-                    return
+                    StatusText.Text = "✈️ Точка 1/" .. #Points
+                    StatusText.TextColor3 = Color3.fromRGB(100, 200, 255)
                 else
+                    -- Останавливаемся
+                    StatusText.Text = "✅ Маршрут пройден!"
+                    StatusText.TextColor3 = Color3.fromRGB(100, 200, 100)
                     StopFlight()
                 end
                 return
@@ -466,39 +526,6 @@ local function StartFlight()
             BodyGyro.CFrame = CFrame.lookAt(Root.Position, Root.Position + Dir)
         end
     end)
-end
-
-local function StopFlight()
-    IsFlying = false
-    if FlyConnection then
-        FlyConnection:Disconnect()
-        FlyConnection = nil
-    end
-    if BodyVelocity then
-        BodyVelocity:Destroy()
-        BodyVelocity = nil
-    end
-    if BodyGyro then
-        BodyGyro:Destroy()
-        BodyGyro = nil
-    end
-    local Character = Player.Character
-    if Character then
-        local Humanoid = Character:FindFirstChild("Humanoid")
-        if Humanoid then
-            Humanoid.PlatformStand = false
-            Humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
-            Humanoid:SetStateEnabled(Enum.HumanoidStateType.GettingUp, true)
-            Humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
-            Humanoid:SetStateEnabled(Enum.HumanoidStateType.Climbing, true)
-        end
-    end
-    StartBtn.Text = "🚀 СТАРТ"
-    StartBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 120)
-    if StatusText.Text ~= "✅ Маршрут пройден!" then
-        StatusText.Text = "⏹ Остановлен"
-        StatusText.TextColor3 = Color3.fromRGB(200, 200, 100)
-    end
 end
 
 -- ===== ПЕРЕКЛЮЧЕНИЕ ВКЛАДОК =====
@@ -529,7 +556,11 @@ PlaceBtn.MouseButton1Click:Connect(PlacePoint)
 ClearBtn.MouseButton1Click:Connect(ClearPoints)
 
 StartBtn.MouseButton1Click:Connect(function()
-    if IsFlying then StopFlight() else StartFlight() end
+    if IsFlying then
+        StopFlight()
+    else
+        StartFlight()
+    end
 end)
 
 StopBtn.MouseButton1Click:Connect(StopFlight)
