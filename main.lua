@@ -34,7 +34,7 @@ ScreenGui.Name = "Navigator"
 ScreenGui.Parent = Player:WaitForChild("PlayerGui")
 ScreenGui.ResetOnSpawn = false
 
--- ===== ОСНОВНОЕ ОКНО (УВЕЛИЧЕНО) =====
+-- ===== ОСНОВНОЕ ОКНО =====
 local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 360, 0, 480)
 MainFrame.Position = UDim2.new(0.5, -180, 0.5, -240)
@@ -367,7 +367,6 @@ ConfigPanel.BackgroundTransparency = 1
 ConfigPanel.Visible = false
 ConfigPanel.Parent = Content
 
--- Поле имени
 local ConfigNameInput = Instance.new("TextBox")
 ConfigNameInput.Size = UDim2.new(0.5, 0, 0, 30)
 ConfigNameInput.Position = UDim2.new(0.075, 0, 0.03, 0)
@@ -383,14 +382,13 @@ local NameCorner = Instance.new("UICorner")
 NameCorner.CornerRadius = UDim.new(0, 6)
 NameCorner.Parent = ConfigNameInput
 
--- Кнопка сохранить
 local SaveConfigBtn = Instance.new("TextButton")
 SaveConfigBtn.Size = UDim2.new(0.3, 0, 0, 30)
 SaveConfigBtn.Position = UDim2.new(0.62, 0, 0.03, 0)
-SaveConfigBtn.Text = "💾 СОХРАНИТЬ"
+SaveConfigBtn.Text = HasToken and "💾 СОХРАНИТЬ" or "🔒 НЕТ ТОКЕНА"
 SaveConfigBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 SaveConfigBtn.TextSize = 12
-SaveConfigBtn.BackgroundColor3 = Color3.fromRGB(123, 63, 252)
+SaveConfigBtn.BackgroundColor3 = HasToken and Color3.fromRGB(123, 63, 252) or Color3.fromRGB(80, 80, 120)
 SaveConfigBtn.BorderSizePixel = 0
 SaveConfigBtn.Font = Enum.Font.GothamSemibold
 SaveConfigBtn.Parent = ConfigPanel
@@ -398,12 +396,6 @@ local SaveCorner = Instance.new("UICorner")
 SaveCorner.CornerRadius = UDim.new(0, 6)
 SaveCorner.Parent = SaveConfigBtn
 
-if not HasToken then
-    SaveConfigBtn.Text = "🔒 ТОКЕН НЕТ"
-    SaveConfigBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 120)
-end
-
--- Список конфигов
 local ConfigList = Instance.new("ScrollingFrame")
 ConfigList.Size = UDim2.new(0.85, 0, 0, 200)
 ConfigList.Position = UDim2.new(0.075, 0, 0.15, 0)
@@ -416,7 +408,6 @@ local ConfigCorner = Instance.new("UICorner")
 ConfigCorner.CornerRadius = UDim.new(0, 6)
 ConfigCorner.Parent = ConfigList
 
--- Статус конфигов
 local ConfigStatus = Instance.new("TextLabel")
 ConfigStatus.Size = UDim2.new(0.9, 0, 0, 20)
 ConfigStatus.Position = UDim2.new(0.05, 0, 0.85, 0)
@@ -477,7 +468,6 @@ local function SaveConfigToGitHub(name)
         return false
     end
     
-    -- Формируем данные
     local data = {
         name = name,
         points = Points,
@@ -489,7 +479,6 @@ local function SaveConfigToGitHub(name)
     local json = HttpService:JSONEncode(data)
     local encoded = HttpService:Base64Encode(json)
     
-    -- Проверяем, существует ли уже такой файл
     local url = "https://api.github.com/repos/" .. GITHUB_USER .. "/" .. GITHUB_REPO .. "/contents/" .. GITHUB_PATH .. "/" .. name .. ".json"
     local headers = {
         ["Authorization"] = "Bearer " .. GITHUB_TOKEN,
@@ -508,7 +497,6 @@ local function SaveConfigToGitHub(name)
         end
     end
     
-    -- Отправляем запрос на создание/обновление
     local body = {
         message = "Save config: " .. name,
         content = encoded,
@@ -519,12 +507,11 @@ local function SaveConfigToGitHub(name)
     end
     
     local jsonBody = HttpService:JSONEncode(body)
-    local method = sha and "PUT" or "PUT"
     
     local success, result = pcall(function()
         return HttpService:RequestAsync({
             Url = url,
-            Method = method,
+            Method = "PUT",
             Headers = {
                 ["Authorization"] = "Bearer " .. GITHUB_TOKEN,
                 ["Accept"] = "application/vnd.github.v3+json",
@@ -615,7 +602,6 @@ local function RefreshConfigList()
         nameLabel.Font = Enum.Font.Gotham
         nameLabel.Parent = row
         
-        -- Кнопка загрузить
         local loadBtn = Instance.new("TextButton")
         loadBtn.Size = UDim2.new(0.2, 0, 0.8, 0)
         loadBtn.Position = UDim2.new(0.6, 0, 0.1, 0)
@@ -638,7 +624,6 @@ local function RefreshConfigList()
                 IsLoop = data.loop or false
                 LoopDelay = data.delay or 1
                 
-                -- Обновляем интерфейс
                 SpeedInput.Text = tostring(Speed)
                 DelayInput.Text = tostring(LoopDelay)
                 LoopBtn.Text = IsLoop and "ВКЛ" or "ВЫКЛ"
@@ -653,7 +638,6 @@ local function RefreshConfigList()
             end
         end)
         
-        -- Кнопка удалить (только если есть токен)
         if HasToken then
             local delBtn = Instance.new("TextButton")
             delBtn.Size = UDim2.new(0.15, 0, 0.8, 0)
@@ -750,4 +734,13 @@ local function StopFlight()
     end
     StartBtn.Text = "🚀 СТАРТ"
     StartBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 120)
-    if StatusText
+    if StatusText.Text ~= "✅ Маршрут пройден!" then
+        StatusText.Text = "⏹ Остановлен"
+        StatusText.TextColor3 = Color3.fromRGB(200, 200, 100)
+    end
+end
+
+local function StartFlight()
+    if #Points == 0 then
+        StatusText.Text = "❌ Нет точек!"
+        StatusText.TextColor3 = Color3.from
