@@ -1,6 +1,5 @@
 -- [[ НАВИГАТОР ПО ТОЧКАМ (с локальным сохранением) ]]
--- Функции: постановка точек, полёт, зацикливание, задержка
--- Сохранение: автоматически при перезапуске, кнопка "СОХРАНИТЬ" в настройках
+-- Функции: постановка точек, полёт, зацикливание, задержка, сохранение
 
 local Player = game.Players.LocalPlayer
 local RunService = game:GetService("RunService")
@@ -147,9 +146,9 @@ PointsPanel.BackgroundTransparency = 1
 PointsPanel.Parent = Content
 
 local PlaceBtn = Instance.new("TextButton")
-PlaceBtn.Size = UDim2.new(0.85, 0, 0, 44)
+PlaceBtn.Size = UDim2.new(0.42, 0, 0, 44)
 PlaceBtn.Position = UDim2.new(0.075, 0, 0.04, 0)
-PlaceBtn.Text = "📌 ПОСТАВИТЬ ТОЧКУ"
+PlaceBtn.Text = "📌 ПОСТАВИТЬ"
 PlaceBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 PlaceBtn.TextSize = 15
 PlaceBtn.BackgroundColor3 = Color3.fromRGB(123, 63, 252)
@@ -160,10 +159,25 @@ local PlaceCorner = Instance.new("UICorner")
 PlaceCorner.CornerRadius = UDim.new(0, 8)
 PlaceCorner.Parent = PlaceBtn
 
+-- ===== НОВАЯ КНОПКА "УДАЛИТЬ ПОСЛЕДНЮЮ" =====
+local UndoBtn = Instance.new("TextButton")
+UndoBtn.Size = UDim2.new(0.42, 0, 0, 44)
+UndoBtn.Position = UDim2.new(0.51, 0, 0.04, 0)
+UndoBtn.Text = "↩️ УДАЛИТЬ"
+UndoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+UndoBtn.TextSize = 15
+UndoBtn.BackgroundColor3 = Color3.fromRGB(255, 170, 0)
+UndoBtn.BorderSizePixel = 0
+UndoBtn.Font = Enum.Font.GothamSemibold
+UndoBtn.Parent = PointsPanel
+local UndoCorner = Instance.new("UICorner")
+UndoCorner.CornerRadius = UDim.new(0, 8)
+UndoCorner.Parent = UndoBtn
+
 local ClearBtn = Instance.new("TextButton")
-ClearBtn.Size = UDim2.new(0.4, 0, 0, 32)
+ClearBtn.Size = UDim2.new(0.85, 0, 0, 32)
 ClearBtn.Position = UDim2.new(0.075, 0, 0.2, 0)
-ClearBtn.Text = "🗑 ОЧИСТИТЬ"
+ClearBtn.Text = "🗑 ОЧИСТИТЬ ВСЕ"
 ClearBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 ClearBtn.TextSize = 13
 ClearBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 80)
@@ -344,7 +358,6 @@ DelayInput.FocusLost:Connect(function()
     end
 end)
 
--- ===== КНОПКА СОХРАНИТЬ =====
 local SaveBtn = Instance.new("TextButton")
 SaveBtn.Size = UDim2.new(0.85, 0, 0, 40)
 SaveBtn.Position = UDim2.new(0.075, 0, 0.6, 0)
@@ -409,6 +422,19 @@ local function PlacePoint()
     UpdatePointsCount()
     StatusText.Text = "✅ Точка " .. #Points .. " поставлена"
     StatusText.TextColor3 = Color3.fromRGB(100, 200, 100)
+end
+
+-- ===== НОВАЯ ФУНКЦИЯ: УДАЛИТЬ ПОСЛЕДНЮЮ ТОЧКУ =====
+local function UndoLastPoint()
+    if #Points == 0 then
+        StatusText.Text = "❌ Нет точек для удаления"
+        StatusText.TextColor3 = Color3.fromRGB(200, 80, 80)
+        return
+    end
+    table.remove(Points, #Points)
+    UpdatePointsCount()
+    StatusText.Text = "↩️ Последняя точка удалена"
+    StatusText.TextColor3 = Color3.fromRGB(255, 170, 0)
 end
 
 local function ClearPoints()
@@ -591,6 +617,7 @@ end)
 -- ===== КНОПКИ =====
 
 PlaceBtn.MouseButton1Click:Connect(PlacePoint)
+UndoBtn.MouseButton1Click:Connect(UndoLastPoint)
 ClearBtn.MouseButton1Click:Connect(ClearPoints)
 
 StartBtn.MouseButton1Click:Connect(function()
@@ -637,9 +664,11 @@ UserInputService.InputBegan:Connect(function(Input, GameProcessed)
     if Input.KeyCode == Enum.KeyCode.P then
         PlaceBtn.MouseButton1Click:Connect()
     end
+    if Input.KeyCode == Enum.KeyCode.Z then
+        UndoBtn.MouseButton1Click:Connect()
+    end
 end)
 
--- Восстановление при респавне
 Player.CharacterAdded:Connect(function()
     task.wait(0.5)
     if IsFlying then StopFlight() end
@@ -648,5 +677,6 @@ end)
 -- ===== ИНИЦИАЛИЗАЦИЯ =====
 
 UpdatePointsCount()
-print("✅ НАВИГАТОР загружен! P — точка, F — Старт, G — Стоп")
+print("✅ НАВИГАТОР загружен!")
+print("📌 P — точка | ↩️ Z — удалить последнюю | 🚀 F — Старт | ⏹ G — Стоп")
 print("📁 Сохранено точек: " .. #Points)
