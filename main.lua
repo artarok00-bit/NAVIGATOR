@@ -1,32 +1,27 @@
--- [[ НАВИГАТОР ПО ТОЧКАМ + КОНФИГИ (GitHub) ]]
--- Функции: постановка точек, полёт по порядку, зацикливание, задержка, конфиги
+-- [[ НАВИГАТОР ПО ТОЧКАМ (с локальным сохранением) ]]
+-- Функции: постановка точек, полёт, зацикливание, задержка
+-- Сохранение: автоматически при перезапуске, кнопка "СОХРАНИТЬ" в настройках
 
 local Player = game.Players.LocalPlayer
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local HttpService = game:GetService("HttpService")
 
--- ===== НАСТРОЙКИ GITHUB =====
-local GITHUB_TOKEN = ""  -- ВСТАВЬ СВОЙ ТОКЕН (если хочешь сохранять/удалять)
-local GITHUB_USER = "artarok00-bit"
-local GITHUB_REPO = "navigator-configs"
-local GITHUB_BRANCH = "main"
-local GITHUB_PATH = "configs"
+-- ===== ЗАГРУЗКА СОХРАНЁННЫХ ДАННЫХ =====
+local SavedData = _G.NavigatorData or {}
+local Points = SavedData.points or {}
+local Speed = SavedData.speed or 50
+local IsLoop = SavedData.loop or false
+local LoopDelay = SavedData.delay or 1
 
 -- ===== ДАННЫЕ =====
-local Points = {}
 local IsFlying = false
-local IsLoop = false
 local CurrentIndex = 1
-local Speed = 50
-local LoopDelay = 1
 local Minimized = false
 local BodyVelocity = nil
 local BodyGyro = nil
 local FlyConnection = nil
 local CurrentTab = "Points"
 local IsWaitingForLoop = false
-local HasToken = GITHUB_TOKEN ~= ""
 
 -- ===== GUI =====
 local ScreenGui = Instance.new("ScreenGui")
@@ -36,8 +31,8 @@ ScreenGui.ResetOnSpawn = false
 
 -- ===== ОСНОВНОЕ ОКНО =====
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 360, 0, 480)
-MainFrame.Position = UDim2.new(0.5, -180, 0.5, -240)
+MainFrame.Size = UDim2.new(0, 360, 0, 440)
+MainFrame.Position = UDim2.new(0.5, -180, 0.5, -220)
 MainFrame.BackgroundColor3 = Color3.fromRGB(8, 10, 20)
 MainFrame.BorderSizePixel = 0
 MainFrame.ClipsDescendants = true
@@ -74,7 +69,7 @@ TitleText.Parent = TitleBar
 local PointsCount = Instance.new("TextLabel")
 PointsCount.Size = UDim2.new(0.15, 0, 1, 0)
 PointsCount.Position = UDim2.new(0.8, 0, 0, 0)
-PointsCount.Text = "0"
+PointsCount.Text = tostring(#Points)
 PointsCount.TextColor3 = Color3.fromRGB(100, 200, 255)
 PointsCount.TextSize = 26
 PointsCount.TextXAlignment = Enum.TextXAlignment.Right
@@ -117,37 +112,26 @@ TabBar.BorderSizePixel = 0
 TabBar.Parent = MainFrame
 
 local PointsTab = Instance.new("TextButton")
-PointsTab.Size = UDim2.new(0.34, 0, 1, 0)
+PointsTab.Size = UDim2.new(0.5, 0, 1, 0)
 PointsTab.Position = UDim2.new(0, 0, 0, 0)
 PointsTab.Text = "ТОЧКИ"
 PointsTab.TextColor3 = Color3.fromRGB(255, 255, 255)
-PointsTab.TextSize = 13
+PointsTab.TextSize = 14
 PointsTab.BackgroundColor3 = Color3.fromRGB(123, 63, 252)
 PointsTab.BorderSizePixel = 0
 PointsTab.Font = Enum.Font.GothamSemibold
 PointsTab.Parent = TabBar
 
 local SettingsTab = Instance.new("TextButton")
-SettingsTab.Size = UDim2.new(0.33, 0, 1, 0)
-SettingsTab.Position = UDim2.new(0.34, 0, 0, 0)
+SettingsTab.Size = UDim2.new(0.5, 0, 1, 0)
+SettingsTab.Position = UDim2.new(0.5, 0, 0, 0)
 SettingsTab.Text = "НАСТРОЙКИ"
 SettingsTab.TextColor3 = Color3.fromRGB(180, 180, 210)
-SettingsTab.TextSize = 13
+SettingsTab.TextSize = 14
 SettingsTab.BackgroundColor3 = Color3.fromRGB(12, 15, 28)
 SettingsTab.BorderSizePixel = 0
 SettingsTab.Font = Enum.Font.GothamSemibold
 SettingsTab.Parent = TabBar
-
-local ConfigTab = Instance.new("TextButton")
-ConfigTab.Size = UDim2.new(0.33, 0, 1, 0)
-ConfigTab.Position = UDim2.new(0.67, 0, 0, 0)
-ConfigTab.Text = "КОНФИГИ"
-ConfigTab.TextColor3 = Color3.fromRGB(180, 180, 210)
-ConfigTab.TextSize = 13
-ConfigTab.BackgroundColor3 = Color3.fromRGB(12, 15, 28)
-ConfigTab.BorderSizePixel = 0
-ConfigTab.Font = Enum.Font.GothamSemibold
-ConfigTab.Parent = TabBar
 
 -- ===== КОНТЕНТ =====
 local Content = Instance.new("Frame")
@@ -163,8 +147,8 @@ PointsPanel.BackgroundTransparency = 1
 PointsPanel.Parent = Content
 
 local PlaceBtn = Instance.new("TextButton")
-PlaceBtn.Size = UDim2.new(0.85, 0, 0, 42)
-PlaceBtn.Position = UDim2.new(0.075, 0, 0.03, 0)
+PlaceBtn.Size = UDim2.new(0.85, 0, 0, 44)
+PlaceBtn.Position = UDim2.new(0.075, 0, 0.04, 0)
 PlaceBtn.Text = "📌 ПОСТАВИТЬ ТОЧКУ"
 PlaceBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 PlaceBtn.TextSize = 15
@@ -177,8 +161,8 @@ PlaceCorner.CornerRadius = UDim.new(0, 8)
 PlaceCorner.Parent = PlaceBtn
 
 local ClearBtn = Instance.new("TextButton")
-ClearBtn.Size = UDim2.new(0.4, 0, 0, 30)
-ClearBtn.Position = UDim2.new(0.075, 0, 0.18, 0)
+ClearBtn.Size = UDim2.new(0.4, 0, 0, 32)
+ClearBtn.Position = UDim2.new(0.075, 0, 0.2, 0)
 ClearBtn.Text = "🗑 ОЧИСТИТЬ"
 ClearBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 ClearBtn.TextSize = 13
@@ -191,8 +175,8 @@ ClearCorner.CornerRadius = UDim.new(0, 6)
 ClearCorner.Parent = ClearBtn
 
 local PointsList = Instance.new("ScrollingFrame")
-PointsList.Size = UDim2.new(0.4, 0, 0, 30)
-PointsList.Position = UDim2.new(0.52, 0, 0.18, 0)
+PointsList.Size = UDim2.new(0.4, 0, 0, 32)
+PointsList.Position = UDim2.new(0.52, 0, 0.2, 0)
 PointsList.BackgroundColor3 = Color3.fromRGB(18, 22, 40)
 PointsList.BorderSizePixel = 0
 PointsList.ScrollBarThickness = 3
@@ -220,8 +204,8 @@ local function UpdatePointsList()
 end
 
 local StartBtn = Instance.new("TextButton")
-StartBtn.Size = UDim2.new(0.42, 0, 0, 40)
-StartBtn.Position = UDim2.new(0.075, 0, 0.34, 0)
+StartBtn.Size = UDim2.new(0.42, 0, 0, 42)
+StartBtn.Position = UDim2.new(0.075, 0, 0.38, 0)
 StartBtn.Text = "🚀 СТАРТ"
 StartBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 StartBtn.TextSize = 15
@@ -234,8 +218,8 @@ StartCorner.CornerRadius = UDim.new(0, 8)
 StartCorner.Parent = StartBtn
 
 local StopBtn = Instance.new("TextButton")
-StopBtn.Size = UDim2.new(0.42, 0, 0, 40)
-StopBtn.Position = UDim2.new(0.51, 0, 0.34, 0)
+StopBtn.Size = UDim2.new(0.42, 0, 0, 42)
+StopBtn.Position = UDim2.new(0.51, 0, 0.38, 0)
 StopBtn.Text = "⏹ СТОП"
 StopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 StopBtn.TextSize = 15
@@ -249,7 +233,7 @@ StopCorner.Parent = StopBtn
 
 local StatusText = Instance.new("TextLabel")
 StatusText.Size = UDim2.new(0.9, 0, 0, 22)
-StatusText.Position = UDim2.new(0.05, 0, 0.65, 0)
+StatusText.Position = UDim2.new(0.05, 0, 0.68, 0)
 StatusText.Text = "🟢 Готов"
 StatusText.TextColor3 = Color3.fromRGB(100, 200, 100)
 StatusText.TextSize = 13
@@ -267,7 +251,7 @@ SettingsPanel.Parent = Content
 
 local SpeedLabel = Instance.new("TextLabel")
 SpeedLabel.Size = UDim2.new(0.6, 0, 0, 20)
-SpeedLabel.Position = UDim2.new(0.075, 0, 0.04, 0)
+SpeedLabel.Position = UDim2.new(0.075, 0, 0.03, 0)
 SpeedLabel.Text = "🚀 СКОРОСТЬ"
 SpeedLabel.TextColor3 = Color3.fromRGB(180, 180, 220)
 SpeedLabel.TextSize = 13
@@ -278,8 +262,8 @@ SpeedLabel.Parent = SettingsPanel
 
 local SpeedInput = Instance.new("TextBox")
 SpeedInput.Size = UDim2.new(0.3, 0, 0, 30)
-SpeedInput.Position = UDim2.new(0.65, 0, 0.02, 0)
-SpeedInput.Text = "50"
+SpeedInput.Position = UDim2.new(0.65, 0, 0.01, 0)
+SpeedInput.Text = tostring(Speed)
 SpeedInput.TextColor3 = Color3.fromRGB(255, 255, 255)
 SpeedInput.TextSize = 16
 SpeedInput.BackgroundColor3 = Color3.fromRGB(18, 22, 40)
@@ -302,7 +286,7 @@ end)
 
 local LoopLabel = Instance.new("TextLabel")
 LoopLabel.Size = UDim2.new(0.6, 0, 0, 20)
-LoopLabel.Position = UDim2.new(0.075, 0, 0.22, 0)
+LoopLabel.Position = UDim2.new(0.075, 0, 0.2, 0)
 LoopLabel.Text = "🔁 ЗАЦИКЛИТЬ"
 LoopLabel.TextColor3 = Color3.fromRGB(180, 180, 220)
 LoopLabel.TextSize = 13
@@ -313,11 +297,11 @@ LoopLabel.Parent = SettingsPanel
 
 local LoopBtn = Instance.new("TextButton")
 LoopBtn.Size = UDim2.new(0.3, 0, 0, 28)
-LoopBtn.Position = UDim2.new(0.65, 0, 0.2, 0)
-LoopBtn.Text = "ВЫКЛ"
+LoopBtn.Position = UDim2.new(0.65, 0, 0.18, 0)
+LoopBtn.Text = IsLoop and "ВКЛ" or "ВЫКЛ"
 LoopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 LoopBtn.TextSize = 13
-LoopBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 100)
+LoopBtn.BackgroundColor3 = IsLoop and Color3.fromRGB(123, 63, 252) or Color3.fromRGB(60, 60, 100)
 LoopBtn.BorderSizePixel = 0
 LoopBtn.Font = Enum.Font.GothamSemibold
 LoopBtn.Parent = SettingsPanel
@@ -327,7 +311,7 @@ LoopCorner.Parent = LoopBtn
 
 local DelayLabel = Instance.new("TextLabel")
 DelayLabel.Size = UDim2.new(0.6, 0, 0, 20)
-DelayLabel.Position = UDim2.new(0.075, 0, 0.42, 0)
+DelayLabel.Position = UDim2.new(0.075, 0, 0.38, 0)
 DelayLabel.Text = "⏱ ЗАДЕРЖКА (сек)"
 DelayLabel.TextColor3 = Color3.fromRGB(180, 180, 220)
 DelayLabel.TextSize = 13
@@ -338,8 +322,8 @@ DelayLabel.Parent = SettingsPanel
 
 local DelayInput = Instance.new("TextBox")
 DelayInput.Size = UDim2.new(0.3, 0, 0, 30)
-DelayInput.Position = UDim2.new(0.65, 0, 0.4, 0)
-DelayInput.Text = "1"
+DelayInput.Position = UDim2.new(0.65, 0, 0.36, 0)
+DelayInput.Text = tostring(LoopDelay)
 DelayInput.TextColor3 = Color3.fromRGB(255, 255, 255)
 DelayInput.TextSize = 16
 DelayInput.BackgroundColor3 = Color3.fromRGB(18, 22, 40)
@@ -360,318 +344,48 @@ DelayInput.FocusLost:Connect(function()
     end
 end)
 
--- ===== ВКЛАДКА "КОНФИГИ" =====
-local ConfigPanel = Instance.new("Frame")
-ConfigPanel.Size = UDim2.new(1, 0, 1, 0)
-ConfigPanel.BackgroundTransparency = 1
-ConfigPanel.Visible = false
-ConfigPanel.Parent = Content
-
-local ConfigNameInput = Instance.new("TextBox")
-ConfigNameInput.Size = UDim2.new(0.5, 0, 0, 30)
-ConfigNameInput.Position = UDim2.new(0.075, 0, 0.03, 0)
-ConfigNameInput.Text = "мой маршрут"
-ConfigNameInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-ConfigNameInput.TextSize = 14
-ConfigNameInput.BackgroundColor3 = Color3.fromRGB(18, 22, 40)
-ConfigNameInput.BorderSizePixel = 0
-ConfigNameInput.TextXAlignment = Enum.TextXAlignment.Center
-ConfigNameInput.Font = Enum.Font.Gotham
-ConfigNameInput.Parent = ConfigPanel
-local NameCorner = Instance.new("UICorner")
-NameCorner.CornerRadius = UDim.new(0, 6)
-NameCorner.Parent = ConfigNameInput
-
-local SaveConfigBtn = Instance.new("TextButton")
-SaveConfigBtn.Size = UDim2.new(0.3, 0, 0, 30)
-SaveConfigBtn.Position = UDim2.new(0.62, 0, 0.03, 0)
-SaveConfigBtn.Text = HasToken and "💾 СОХРАНИТЬ" or "🔒 НЕТ ТОКЕНА"
-SaveConfigBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-SaveConfigBtn.TextSize = 12
-SaveConfigBtn.BackgroundColor3 = HasToken and Color3.fromRGB(123, 63, 252) or Color3.fromRGB(80, 80, 120)
-SaveConfigBtn.BorderSizePixel = 0
-SaveConfigBtn.Font = Enum.Font.GothamSemibold
-SaveConfigBtn.Parent = ConfigPanel
+-- ===== КНОПКА СОХРАНИТЬ =====
+local SaveBtn = Instance.new("TextButton")
+SaveBtn.Size = UDim2.new(0.85, 0, 0, 40)
+SaveBtn.Position = UDim2.new(0.075, 0, 0.6, 0)
+SaveBtn.Text = "💾 СОХРАНИТЬ КОНФИГ"
+SaveBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SaveBtn.TextSize = 15
+SaveBtn.BackgroundColor3 = Color3.fromRGB(123, 63, 252)
+SaveBtn.BorderSizePixel = 0
+SaveBtn.Font = Enum.Font.GothamSemibold
+SaveBtn.Parent = SettingsPanel
 local SaveCorner = Instance.new("UICorner")
-SaveCorner.CornerRadius = UDim.new(0, 6)
-SaveCorner.Parent = SaveConfigBtn
+SaveCorner.CornerRadius = UDim.new(0, 8)
+SaveCorner.Parent = SaveBtn
 
-local ConfigList = Instance.new("ScrollingFrame")
-ConfigList.Size = UDim2.new(0.85, 0, 0, 200)
-ConfigList.Position = UDim2.new(0.075, 0, 0.15, 0)
-ConfigList.BackgroundColor3 = Color3.fromRGB(18, 22, 40)
-ConfigList.BorderSizePixel = 0
-ConfigList.ScrollBarThickness = 4
-ConfigList.CanvasSize = UDim2.new(0, 0, 0, 0)
-ConfigList.Parent = ConfigPanel
-local ConfigCorner = Instance.new("UICorner")
-ConfigCorner.CornerRadius = UDim.new(0, 6)
-ConfigCorner.Parent = ConfigList
+local SaveStatus = Instance.new("TextLabel")
+SaveStatus.Size = UDim2.new(0.9, 0, 0, 20)
+SaveStatus.Position = UDim2.new(0.05, 0, 0.82, 0)
+SaveStatus.Text = "💡 Настройки сохраняются автоматически"
+SaveStatus.TextColor3 = Color3.fromRGB(180, 180, 220)
+SaveStatus.TextSize = 11
+SaveStatus.TextXAlignment = Enum.TextXAlignment.Center
+SaveStatus.BackgroundTransparency = 1
+SaveStatus.Font = Enum.Font.Gotham
+SaveStatus.Parent = SettingsPanel
 
-local ConfigStatus = Instance.new("TextLabel")
-ConfigStatus.Size = UDim2.new(0.9, 0, 0, 20)
-ConfigStatus.Position = UDim2.new(0.05, 0, 0.85, 0)
-ConfigStatus.Text = "📁 Загрузка..."
-ConfigStatus.TextColor3 = Color3.fromRGB(200, 200, 220)
-ConfigStatus.TextSize = 12
-ConfigStatus.TextXAlignment = Enum.TextXAlignment.Center
-ConfigStatus.BackgroundTransparency = 1
-ConfigStatus.Font = Enum.Font.Gotham
-ConfigStatus.Parent = ConfigPanel
-
--- ===== ФУНКЦИИ GITHUB =====
-
-local function GetConfigList()
-    local url = "https://api.github.com/repos/" .. GITHUB_USER .. "/" .. GITHUB_REPO .. "/contents/" .. GITHUB_PATH
-    local headers = {}
-    if HasToken then
-        headers["Authorization"] = "Bearer " .. GITHUB_TOKEN
-    end
-    headers["Accept"] = "application/vnd.github.v3+json"
-    
-    local success, result = pcall(function()
-        return HttpService:GetAsync(url, headers)
-    end)
-    
-    if not success then return {} end
-    
-    local data = HttpService:JSONDecode(result)
-    if type(data) ~= "table" then return {} end
-    
-    local configs = {}
-    for _, item in ipairs(data) do
-        if item.type == "file" and string.sub(item.name, -5) == ".json" then
-            table.insert(configs, {
-                name = string.sub(item.name, 1, -6),
-                sha = item.sha,
-                url = item.download_url
-            })
-        end
-    end
-    return configs
-end
-
-local function LoadConfigFromURL(url)
-    local success, result = pcall(function()
-        return HttpService:GetAsync(url)
-    end)
-    if not success then return nil end
-    
-    local data = HttpService:JSONDecode(result)
-    return data
-end
-
-local function SaveConfigToGitHub(name)
-    if not HasToken then
-        ConfigStatus.Text = "❌ Нет токена для сохранения!"
-        ConfigStatus.TextColor3 = Color3.fromRGB(200, 80, 80)
-        return false
-    end
-    
-    local data = {
-        name = name,
+-- ===== ФУНКЦИЯ СОХРАНЕНИЯ =====
+local function SaveData()
+    _G.NavigatorData = {
         points = Points,
         speed = Speed,
         loop = IsLoop,
         delay = LoopDelay
     }
-    
-    local json = HttpService:JSONEncode(data)
-    local encoded = HttpService:Base64Encode(json)
-    
-    local url = "https://api.github.com/repos/" .. GITHUB_USER .. "/" .. GITHUB_REPO .. "/contents/" .. GITHUB_PATH .. "/" .. name .. ".json"
-    local headers = {
-        ["Authorization"] = "Bearer " .. GITHUB_TOKEN,
-        ["Accept"] = "application/vnd.github.v3+json"
-    }
-    
-    local sha = nil
-    local success, result = pcall(function()
-        return HttpService:GetAsync(url, headers)
-    end)
-    
-    if success then
-        local data = HttpService:JSONDecode(result)
-        if data and data.sha then
-            sha = data.sha
-        end
-    end
-    
-    local body = {
-        message = "Save config: " .. name,
-        content = encoded,
-        branch = GITHUB_BRANCH
-    }
-    if sha then
-        body.sha = sha
-    end
-    
-    local jsonBody = HttpService:JSONEncode(body)
-    
-    local success, result = pcall(function()
-        return HttpService:RequestAsync({
-            Url = url,
-            Method = "PUT",
-            Headers = {
-                ["Authorization"] = "Bearer " .. GITHUB_TOKEN,
-                ["Accept"] = "application/vnd.github.v3+json",
-                ["Content-Type"] = "application/json"
-            },
-            Body = jsonBody
-        })
-    end)
-    
-    if success then
-        ConfigStatus.Text = "✅ Конфиг сохранён!"
-        ConfigStatus.TextColor3 = Color3.fromRGB(100, 200, 100)
-        return true
-    else
-        ConfigStatus.Text = "❌ Ошибка сохранения!"
-        ConfigStatus.TextColor3 = Color3.fromRGB(200, 80, 80)
-        return false
-    end
+    SaveStatus.Text = "✅ Конфиг сохранён! (" .. #Points .. " точек)"
+    SaveStatus.TextColor3 = Color3.fromRGB(100, 200, 100)
+    task.wait(1.5)
+    SaveStatus.Text = "💡 Настройки сохраняются автоматически"
+    SaveStatus.TextColor3 = Color3.fromRGB(180, 180, 220)
 end
 
-local function DeleteConfigFromGitHub(name, sha)
-    if not HasToken then
-        ConfigStatus.Text = "❌ Нет токена для удаления!"
-        ConfigStatus.TextColor3 = Color3.fromRGB(200, 80, 80)
-        return false
-    end
-    
-    local url = "https://api.github.com/repos/" .. GITHUB_USER .. "/" .. GITHUB_REPO .. "/contents/" .. GITHUB_PATH .. "/" .. name .. ".json"
-    local body = {
-        message = "Delete config: " .. name,
-        sha = sha,
-        branch = GITHUB_BRANCH
-    }
-    
-    local jsonBody = HttpService:JSONEncode(body)
-    
-    local success, result = pcall(function()
-        return HttpService:RequestAsync({
-            Url = url,
-            Method = "DELETE",
-            Headers = {
-                ["Authorization"] = "Bearer " .. GITHUB_TOKEN,
-                ["Accept"] = "application/vnd.github.v3+json",
-                ["Content-Type"] = "application/json"
-            },
-            Body = jsonBody
-        })
-    end)
-    
-    return success
-end
-
-local function RefreshConfigList()
-    for _, child in pairs(ConfigList:GetChildren()) do child:Destroy() end
-    
-    ConfigStatus.Text = "📁 Загрузка..."
-    ConfigStatus.TextColor3 = Color3.fromRGB(200, 200, 220)
-    
-    local configs = GetConfigList()
-    
-    if #configs == 0 then
-        ConfigStatus.Text = "📁 Нет сохранённых конфигов"
-        ConfigStatus.TextColor3 = Color3.fromRGB(200, 200, 220)
-        return
-    end
-    
-    ConfigList.CanvasSize = UDim2.new(0, 0, 0, #configs * 32 + 10)
-    
-    for i, config in ipairs(configs) do
-        local row = Instance.new("Frame")
-        row.Size = UDim2.new(1, -10, 0, 28)
-        row.Position = UDim2.new(0, 0, 0, (i-1) * 30 + 5)
-        row.BackgroundColor3 = Color3.fromRGB(25, 30, 50)
-        row.BorderSizePixel = 0
-        row.Parent = ConfigList
-        local rowCorner = Instance.new("UICorner")
-        rowCorner.CornerRadius = UDim.new(0, 4)
-        rowCorner.Parent = row
-        
-        local nameLabel = Instance.new("TextLabel")
-        nameLabel.Size = UDim2.new(0.5, 0, 1, 0)
-        nameLabel.Position = UDim2.new(0.04, 0, 0, 0)
-        nameLabel.Text = "📁 " .. config.name
-        nameLabel.TextColor3 = Color3.fromRGB(220, 220, 255)
-        nameLabel.TextSize = 12
-        nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-        nameLabel.BackgroundTransparency = 1
-        nameLabel.Font = Enum.Font.Gotham
-        nameLabel.Parent = row
-        
-        local loadBtn = Instance.new("TextButton")
-        loadBtn.Size = UDim2.new(0.2, 0, 0.8, 0)
-        loadBtn.Position = UDim2.new(0.6, 0, 0.1, 0)
-        loadBtn.Text = "ЗАГР"
-        loadBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        loadBtn.TextSize = 11
-        loadBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 120)
-        loadBtn.BorderSizePixel = 0
-        loadBtn.Font = Enum.Font.GothamSemibold
-        loadBtn.Parent = row
-        local loadCorner = Instance.new("UICorner")
-        loadCorner.CornerRadius = UDim.new(0, 4)
-        loadCorner.Parent = loadBtn
-        
-        loadBtn.MouseButton1Click:Connect(function()
-            local data = LoadConfigFromURL(config.url)
-            if data then
-                Points = data.points or {}
-                Speed = data.speed or 50
-                IsLoop = data.loop or false
-                LoopDelay = data.delay or 1
-                
-                SpeedInput.Text = tostring(Speed)
-                DelayInput.Text = tostring(LoopDelay)
-                LoopBtn.Text = IsLoop and "ВКЛ" or "ВЫКЛ"
-                LoopBtn.BackgroundColor3 = IsLoop and Color3.fromRGB(123, 63, 252) or Color3.fromRGB(60, 60, 100)
-                
-                UpdatePointsCount()
-                ConfigStatus.Text = "✅ Загружено: " .. config.name
-                ConfigStatus.TextColor3 = Color3.fromRGB(100, 200, 100)
-            else
-                ConfigStatus.Text = "❌ Ошибка загрузки!"
-                ConfigStatus.TextColor3 = Color3.fromRGB(200, 80, 80)
-            end
-        end)
-        
-        if HasToken then
-            local delBtn = Instance.new("TextButton")
-            delBtn.Size = UDim2.new(0.15, 0, 0.8, 0)
-            delBtn.Position = UDim2.new(0.82, 0, 0.1, 0)
-            delBtn.Text = "✕"
-            delBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-            delBtn.TextSize = 14
-            delBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 80)
-            delBtn.BorderSizePixel = 0
-            delBtn.Font = Enum.Font.Gotham
-            delBtn.Parent = row
-            local delCorner = Instance.new("UICorner")
-            delCorner.CornerRadius = UDim.new(0, 4)
-            delCorner.Parent = delBtn
-            
-            delBtn.MouseButton1Click:Connect(function()
-                local success = DeleteConfigFromGitHub(config.name, config.sha)
-                if success then
-                    ConfigStatus.Text = "🗑 Удалено: " .. config.name
-                    ConfigStatus.TextColor3 = Color3.fromRGB(200, 200, 100)
-                    RefreshConfigList()
-                else
-                    ConfigStatus.Text = "❌ Ошибка удаления!"
-                    ConfigStatus.TextColor3 = Color3.fromRGB(200, 80, 80)
-                end
-            end)
-        end
-    end
-    
-    ConfigStatus.Text = "📁 " .. #configs .. " конфигов"
-    ConfigStatus.TextColor3 = Color3.fromRGB(200, 200, 220)
-end
-
--- ===== ФУНКЦИИ =====
+-- ===== ОСТАЛЬНЫЕ ФУНКЦИИ =====
 
 local function UpdatePointsCount()
     PointsCount.Text = tostring(#Points)
@@ -743,4 +457,196 @@ end
 local function StartFlight()
     if #Points == 0 then
         StatusText.Text = "❌ Нет точек!"
-        StatusText.TextColor3 = Color3.from
+        StatusText.TextColor3 = Color3.fromRGB(200, 80, 80)
+        return
+    end
+    if IsFlying then return end
+    IsFlying = true
+    IsWaitingForLoop = false
+    CurrentIndex = 1
+
+    local Character = Player.Character
+    if not Character then
+        IsFlying = false
+        StatusText.Text = "❌ Персонаж не найден"
+        StatusText.TextColor3 = Color3.fromRGB(200, 80, 80)
+        return
+    end
+    local Root = Character:FindFirstChild("HumanoidRootPart")
+    local Humanoid = Character:FindFirstChild("Humanoid")
+    if not Root or not Humanoid then
+        IsFlying = false
+        StatusText.Text = "❌ Ошибка персонажа"
+        StatusText.TextColor3 = Color3.fromRGB(200, 80, 80)
+        return
+    end
+
+    StatusText.Text = "✈️ Летим к точке 1/" .. #Points
+    StatusText.TextColor3 = Color3.fromRGB(100, 200, 255)
+    StartBtn.Text = "ЛЕТИТ..."
+    StartBtn.BackgroundColor3 = Color3.fromRGB(200, 200, 100)
+
+    Humanoid.PlatformStand = true
+    Humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+    Humanoid:SetStateEnabled(Enum.HumanoidStateType.GettingUp, false)
+    Humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
+    Humanoid:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
+
+    BodyVelocity = Instance.new("BodyVelocity")
+    BodyVelocity.Velocity = Vector3.new(0, 0, 0)
+    BodyVelocity.MaxForce = Vector3.new(400000, 400000, 400000)
+    BodyVelocity.Parent = Root
+
+    BodyGyro = Instance.new("BodyGyro")
+    BodyGyro.CFrame = Root.CFrame
+    BodyGyro.MaxTorque = Vector3.new(400000, 400000, 400000)
+    BodyGyro.Parent = Root
+
+    if FlyConnection then FlyConnection:Disconnect() end
+
+    FlyConnection = RunService.Heartbeat:Connect(function()
+        if not IsFlying then
+            StopFlight()
+            return
+        end
+        if not Character or not Root then
+            StopFlight()
+            return
+        end
+
+        if IsWaitingForLoop then
+            return
+        end
+
+        local CurrentPos = Root.Position
+        local Target = Points[CurrentIndex]
+        local Dist = (Target - CurrentPos).Magnitude
+
+        if Dist < 3 then
+            CurrentIndex = CurrentIndex + 1
+            if CurrentIndex > #Points then
+                if IsLoop then
+                    IsWaitingForLoop = true
+                    StatusText.Text = "🔄 Зацикливание... " .. LoopDelay .. "с"
+                    StatusText.TextColor3 = Color3.fromRGB(100, 200, 255)
+                    
+                    if BodyVelocity then
+                        BodyVelocity.Velocity = Vector3.new(0, 0, 0)
+                    end
+                    
+                    task.wait(LoopDelay)
+                    
+                    if not IsFlying then
+                        IsWaitingForLoop = false
+                        return
+                    end
+                    
+                    IsWaitingForLoop = false
+                    CurrentIndex = 1
+                    StatusText.Text = "✈️ Точка 1/" .. #Points
+                    StatusText.TextColor3 = Color3.fromRGB(100, 200, 255)
+                else
+                    StatusText.Text = "✅ Маршрут пройден!"
+                    StatusText.TextColor3 = Color3.fromRGB(100, 200, 100)
+                    StopFlight()
+                end
+                return
+            end
+            StatusText.Text = "✈️ Точка " .. CurrentIndex .. "/" .. #Points
+            return
+        end
+
+        local Dir = (Target - CurrentPos).Unit
+        if BodyVelocity then
+            BodyVelocity.Velocity = Dir * Speed
+        end
+        if BodyGyro then
+            BodyGyro.CFrame = CFrame.lookAt(Root.Position, Root.Position + Dir)
+        end
+    end)
+end
+
+-- ===== ПЕРЕКЛЮЧЕНИЕ ВКЛАДОК =====
+
+PointsTab.MouseButton1Click:Connect(function()
+    CurrentTab = "Points"
+    PointsPanel.Visible = true
+    SettingsPanel.Visible = false
+    PointsTab.BackgroundColor3 = Color3.fromRGB(123, 63, 252)
+    PointsTab.TextColor3 = Color3.fromRGB(255, 255, 255)
+    SettingsTab.BackgroundColor3 = Color3.fromRGB(12, 15, 28)
+    SettingsTab.TextColor3 = Color3.fromRGB(180, 180, 210)
+end)
+
+SettingsTab.MouseButton1Click:Connect(function()
+    CurrentTab = "Settings"
+    PointsPanel.Visible = false
+    SettingsPanel.Visible = true
+    SettingsTab.BackgroundColor3 = Color3.fromRGB(123, 63, 252)
+    SettingsTab.TextColor3 = Color3.fromRGB(255, 255, 255)
+    PointsTab.BackgroundColor3 = Color3.fromRGB(12, 15, 28)
+    PointsTab.TextColor3 = Color3.fromRGB(180, 180, 210)
+end)
+
+-- ===== КНОПКИ =====
+
+PlaceBtn.MouseButton1Click:Connect(PlacePoint)
+ClearBtn.MouseButton1Click:Connect(ClearPoints)
+
+StartBtn.MouseButton1Click:Connect(function()
+    if IsFlying then
+        StopFlight()
+    else
+        StartFlight()
+    end
+end)
+
+StopBtn.MouseButton1Click:Connect(StopFlight)
+
+LoopBtn.MouseButton1Click:Connect(function()
+    IsLoop = not IsLoop
+    LoopBtn.Text = IsLoop and "ВКЛ" or "ВЫКЛ"
+    LoopBtn.BackgroundColor3 = IsLoop and Color3.fromRGB(123, 63, 252) or Color3.fromRGB(60, 60, 100)
+end)
+
+SaveBtn.MouseButton1Click:Connect(SaveData)
+
+MinBtn.MouseButton1Click:Connect(function()
+    Minimized = not Minimized
+    Content.Visible = not Minimized
+    TabBar.Visible = not Minimized
+    MinBtn.Text = Minimized and "+" or "─"
+    MainFrame.Size = Minimized and UDim2.new(0, 360, 0, 46) or UDim2.new(0, 360, 0, 440)
+end)
+
+CloseBtn.MouseButton1Click:Connect(function()
+    StopFlight()
+    SaveData()
+    ScreenGui:Destroy()
+end)
+
+-- Горячие клавиши
+UserInputService.InputBegan:Connect(function(Input, GameProcessed)
+    if GameProcessed then return end
+    if Input.KeyCode == Enum.KeyCode.F then
+        StartBtn.MouseButton1Click:Connect()
+    end
+    if Input.KeyCode == Enum.KeyCode.G then
+        StopBtn.MouseButton1Click:Connect()
+    end
+    if Input.KeyCode == Enum.KeyCode.P then
+        PlaceBtn.MouseButton1Click:Connect()
+    end
+end)
+
+-- Восстановление при респавне
+Player.CharacterAdded:Connect(function()
+    task.wait(0.5)
+    if IsFlying then StopFlight() end
+end)
+
+-- ===== ИНИЦИАЛИЗАЦИЯ =====
+
+UpdatePointsCount()
+print("✅ НАВИГАТОР загружен! P — точка, F — Старт, G — Стоп")
+print("📁 Сохранено точек: " .. #Points)
